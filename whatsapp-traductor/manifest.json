@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Traductor para WhatsApp Web",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Traduce mensajes de WhatsApp Web con un clic y traduce lo que escribes antes de enviarlo.",
   "permissions": ["storage"],
   "host_permissions": ["https://translate.googleapis.com/*"],

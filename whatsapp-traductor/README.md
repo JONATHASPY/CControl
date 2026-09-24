@@ -30,6 +30,9 @@ activar la traducción automática.
 
 ## Notas
 
+- Si aparece *"Extension context invalidated"* o *"La extensión se actualizó"*,
+  recarga WhatsApp Web (F5). Pasa siempre que recargas o actualizas la extensión.
+
 - Usa el servicio gratuito de Google Translate; no necesita clave ni cuenta.
 - Los textos de tus mensajes se envían a Google para traducirlos.
 - Si WhatsApp cambia su página y los botones dejan de aparecer, habrá que

@@ -9,13 +9,29 @@ chrome.storage.onChanged.addListener((changes) => {
   for (const [key, { newValue }] of Object.entries(changes)) settings[key] = newValue;
 });
 
+const RELOAD_MSG = "La extensión se actualizó. Recarga WhatsApp Web (F5) para seguir traduciendo.";
+
 function translate(text, target) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({ type: "translate", text, target }, (res) => {
-      if (res && res.ok) resolve(res);
-      else reject(res ? res.error : chrome.runtime.lastError?.message);
-    });
+    // Si la extensión se recargó, este script queda desconectado hasta recargar la página.
+    if (!chrome.runtime?.id) return reject(RELOAD_MSG);
+    try {
+      chrome.runtime.sendMessage({ type: "translate", text, target }, (res) => {
+        if (res && res.ok) resolve(res);
+        else reject(res ? res.error : chrome.runtime.lastError?.message);
+      });
+    } catch (e) {
+      reject(String(e).includes("context invalidated") ? RELOAD_MSG : e);
+    }
   });
+}
+
+function showToast(text) {
+  const t = document.createElement("div");
+  t.className = "wat-toast";
+  t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
 }
 
 // ---------- Mensajes recibidos/enviados: botón de traducir ----------
@@ -110,7 +126,7 @@ async function translateComposer() {
     const res = await translate(text, settings.theirLang);
     replaceComposerText(el, res.text);
   } catch (e) {
-    alert("Error al traducir: " + e);
+    showToast("Error al traducir: " + e);
   } finally {
     if (btn) btn.textContent = "🌐→";
   }
