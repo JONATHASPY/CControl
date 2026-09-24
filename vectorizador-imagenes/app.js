@@ -45,7 +45,23 @@
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo generar el PNG.'))), 'image/png'));
   }
 
-  function download(blob, filename) {
+  // Cuando la página se abre dentro de claude.ai, las descargas pasan por el
+  // visor (pide confirmación). Fuera de él, se usa un enlace normal.
+  const downloadsReady = window.claude && typeof window.claude.use === 'function'
+    ? window.claude.use('downloads').catch(() => null)
+    : Promise.resolve(null);
+
+  async function download(blob, filename) {
+    const saver = await downloadsReady;
+    if (saver) {
+      try {
+        await saver.save({ filename, data: blob });
+        toast('Archivo guardado: ' + filename);
+      } catch (err) {
+        if (err && err.code !== 'declined') toast('No se pudo guardar el archivo. Usa clic derecho → «Guardar imagen».');
+      }
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
