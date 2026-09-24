@@ -63,18 +63,9 @@ para imprimir en grande).
 Descarga el **SVG**, copia su código o descarga un **PNG de alta resolución** (×1 a ×8) renderizado
 desde el vector, perfecto para ampliar logos pequeños sin pixelado.
 
-### La IA y el archivo `index.html`
-
-Por seguridad, los navegadores no dejan que una página abierta con doble
-clic (`file://`) lea el modelo de IA. Si abres `index.html` directamente,
-la mejora usará el método rápido. Para usar la IA en tu equipo, abre la
-carpeta con un servidor local, por ejemplo:
-
-```
-npx http-server vectorizador-imagenes
-```
-
-y entra en la dirección que muestra (normalmente http://127.0.0.1:8080).
+La IA funciona también abriendo `index.html` con doble clic y sin
+conexión: el motor (`vendor/tf.min.js`) y el modelo (`models/esrgan-gans-x4.js`)
+van incluidos en la carpeta.
 
 ## Cómo funciona
 
@@ -89,7 +80,7 @@ y entra en la dirección que muestra (normalmente http://127.0.0.1:8080).
 ## Licencias de terceros
 
 - `vendor/tf.min.js`: TensorFlow.js 4.22.0, © Google LLC, licencia Apache 2.0.
-- `models/esrgan-gans-x4/`: modelo «gans» de UpscalerJS (`@upscalerjs/esrgan-legacy`),
+- `models/esrgan-gans-x4.js`: modelo «gans» de UpscalerJS (`@upscalerjs/esrgan-legacy`),
   pesos de idealo/image-super-resolution; licencia MIT (ver `models/LICENSE-upscalerjs.txt`).
 
 > Nota: la mejora usa algoritmos clásicos de procesamiento de imagen, no

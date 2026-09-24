@@ -24,7 +24,11 @@
   const TILE = 96;   // tamaño de bloque (en píxeles de entrada)
   const PAD = 10;    // margen de contexto alrededor de cada bloque
 
-  const MODEL_PATH = 'models/esrgan-gans-x4/model.json';
+  // El modelo (topología + pesos en base64) va en un .js: se carga con una
+  // etiqueta <script> (funciona incluso abriendo index.html con doble clic)
+  // o, si la página no permite ese script, leyendo el mismo archivo con fetch.
+  const MODEL_FILE = 'models/esrgan-gans-x4.js';
+  const MODEL_GLOBAL = 'ESRGAN_GANS_X4';
   const SCALE = 4;
 
   let tfPromise = null;
@@ -82,16 +86,42 @@
     return tfPromise;
   }
 
+  async function readModelFile() {
+    if (!window[MODEL_GLOBAL]) {
+      try { await loadScript(MODEL_FILE); } catch (e) { /* se prueba con fetch */ }
+    }
+    if (window[MODEL_GLOBAL]) return window[MODEL_GLOBAL];
+    const res = await fetch(MODEL_FILE);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    return JSON.parse(text.slice(text.indexOf('=') + 1, text.lastIndexOf(';')));
+  }
+
+  function base64ToBuffer(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+
   let modelPromise = null;
   function loadModel(tf) {
     if (!modelPromise) {
       registerCustomLayers(tf);
-      modelPromise = tf.loadLayersModel(MODEL_PATH).catch((err) => {
+      modelPromise = (async () => {
+        const m = await readModelFile();
+        const model = await tf.loadLayersModel(tf.io.fromMemory({
+          modelTopology: m.modelTopology,
+          weightSpecs: m.weightSpecs,
+          weightData: base64ToBuffer(m.weights),
+          format: m.format,
+          generatedBy: m.generatedBy,
+          convertedBy: m.convertedBy,
+        }));
+        m.weights = null; // libera la copia en texto
+        return model;
+      })().catch((err) => {
         modelPromise = null;
-        if (location.protocol === 'file:') {
-          throw new Error('El modelo de IA no se puede leer abriendo el archivo directamente. ' +
-            'Usa la versión online o abre la carpeta con un servidor local (ver README).');
-        }
         throw new Error('No se pudo cargar el modelo de IA (' + err.message + ').');
       });
     }
