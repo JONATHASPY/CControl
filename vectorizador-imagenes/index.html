@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vectorizador y Mejorador de Imágenes</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>🖼️ Vectorizador y Mejorador de Imágenes</h1>
+    <p>Todo se procesa en tu navegador: tus imágenes no se suben a ningún sitio.</p>
+  </header>
+
+  <main>
+    <section id="drop" class="drop" tabindex="0">
+      <input type="file" id="file" accept="image/*" hidden>
+      <p><strong>Arrastra una imagen aquí</strong>, pégala con <kbd>Ctrl</kbd>+<kbd>V</kbd>
+        o <button type="button" id="pick" class="link">elige un archivo</button>.</p>
+      <p id="info" class="muted">PNG, JPG, WebP, GIF, BMP…</p>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" class="tab active" data-tab="enhance" aria-selected="true">✨ Mejorar calidad</button>
+      <button role="tab" class="tab" data-tab="vector" aria-selected="false">✏️ Vectorizar (SVG)</button>
+    </nav>
+
+    <!-- ===================== MEJORAR CALIDAD ===================== -->
+    <section class="panel" id="panel-enhance">
+      <div class="controls">
+        <label>Ampliar
+          <select id="e-scale">
+            <option value="1">×1 (mismo tamaño)</option>
+            <option value="2" selected>×2</option>
+            <option value="3">×3</option>
+            <option value="4">×4</option>
+          </select>
+        </label>
+        <label>Reducir ruido <output id="e-denoise-v">20</output>
+          <input type="range" id="e-denoise" min="0" max="100" value="20">
+        </label>
+        <label>Nitidez <output id="e-sharpen-v">50</output>
+          <input type="range" id="e-sharpen" min="0" max="100" value="50">
+        </label>
+        <label>Saturación <output id="e-sat-v">0</output>
+          <input type="range" id="e-sat" min="-50" max="50" value="0">
+        </label>
+        <label class="check"><input type="checkbox" id="e-levels" checked> Mejorar contraste automáticamente</label>
+        <div class="actions">
+          <button type="button" id="e-run" class="primary" disabled>✨ Mejorar</button>
+          <button type="button" id="e-download" disabled>⬇️ Descargar PNG</button>
+        </div>
+        <p class="muted small" id="e-status"></p>
+      </div>
+
+      <div class="viewer">
+        <div class="compare" id="e-compare" hidden>
+          <img id="e-after" alt="Resultado">
+          <div class="before" id="e-before-wrap"><img id="e-before" alt="Original"></div>
+          <input type="range" id="e-slider" min="0" max="100" value="50" aria-label="Comparar antes y después">
+          <span class="tag left">Antes</span><span class="tag right">Después</span>
+        </div>
+        <p class="placeholder" id="e-placeholder">Carga una imagen para empezar.</p>
+      </div>
+    </section>
+
+    <!-- ===================== VECTORIZAR ===================== -->
+    <section class="panel" id="panel-vector" hidden>
+      <div class="controls">
+        <label>Preajuste
+          <select id="v-preset">
+            <option value="logo">Logo / icono (pocos colores)</option>
+            <option value="illustration" selected>Ilustración / dibujo</option>
+            <option value="photo">Fotografía (muchos colores)</option>
+            <option value="bw">Blanco y negro</option>
+            <option value="custom">Personalizado</option>
+          </select>
+        </label>
+        <label>Colores <output id="v-colors-v">16</output>
+          <input type="range" id="v-colors" min="2" max="64" value="16">
+        </label>
+        <label>Detalle (resolución de trabajo) <output id="v-size-v">1000</output> px
+          <input type="range" id="v-size" min="200" max="2000" step="100" value="1000">
+        </label>
+        <label>Eliminar manchas menores de <output id="v-speck-v">10</output> px
+          <input type="range" id="v-speck" min="1" max="200" value="10">
+        </label>
+        <label>Simplificación <output id="v-tol-v">0.8</output>
+          <input type="range" id="v-tol" min="0" max="4" step="0.1" value="0.8">
+        </label>
+        <label>Suavizar entrada <output id="v-blur-v">0.0</output>
+          <input type="range" id="v-blur" min="0" max="3" step="0.1" value="0">
+        </label>
+        <label>Esquinas nítidas si el ángulo es menor de <output id="v-corner-v">100</output>°
+          <input type="range" id="v-corner" min="0" max="180" value="100">
+        </label>
+        <label class="check"><input type="checkbox" id="v-smooth" checked> Curvas suaves</label>
+        <label class="check"><input type="checkbox" id="v-clean" checked> Limpiar bordes (quita halos de antialiasing)</label>
+        <label class="check"><input type="checkbox" id="v-use-enhanced"> Vectorizar la imagen mejorada (si existe)</label>
+        <div class="actions">
+          <button type="button" id="v-run" class="primary" disabled>✏️ Vectorizar</button>
+          <button type="button" id="v-download" disabled>⬇️ Descargar SVG</button>
+        </div>
+        <div class="actions">
+          <label class="inline">PNG desde el SVG a
+            <select id="v-png-scale">
+              <option value="1">×1</option>
+              <option value="2">×2</option>
+              <option value="4" selected>×4</option>
+              <option value="8">×8</option>
+            </select>
+          </label>
+          <button type="button" id="v-download-png" disabled>⬇️ PNG alta resolución</button>
+        </div>
+        <p class="muted small" id="v-status"></p>
+      </div>
+
+      <div class="viewer">
+        <div class="side" id="v-side" hidden>
+          <figure><img id="v-original" alt="Original"><figcaption>Original</figcaption></figure>
+          <figure><img id="v-result" alt="SVG"><figcaption>Vector (SVG)</figcaption></figure>
+        </div>
+        <p class="placeholder" id="v-placeholder">Carga una imagen para empezar.</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="busy" class="busy" hidden><div class="spinner"></div><span id="busy-text">Procesando…</span></div>
+
+  <script src="enhancer.js"></script>
+  <script src="vectorizer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

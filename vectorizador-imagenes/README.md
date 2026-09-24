@@ -1,0 +1,58 @@
+# 🖼️ Vectorizador y Mejorador de Imágenes
+
+Aplicación web sencilla que **convierte imágenes a vectores (SVG)** y
+**mejora su calidad** (ampliación, reducción de ruido y nitidez).
+
+Todo se procesa en tu navegador: no hace falta instalar nada, funciona sin
+conexión y tus imágenes no se suben a ningún servidor.
+
+## Cómo usarla
+
+1. Abre `index.html` con Chrome, Edge, Firefox o Safari (doble clic).
+2. Arrastra una imagen, pégala con **Ctrl+V** o pulsa *elige un archivo*.
+3. Elige la pestaña:
+
+### ✨ Mejorar calidad
+
+| Opción | Qué hace |
+| --- | --- |
+| **Ampliar ×1–×4** | Aumenta la resolución con remuestreo Lanczos-3 (más nítido que el reescalado normal). |
+| **Reducir ruido** | Filtro bilateral: suaviza el grano y los artefactos JPEG conservando los bordes. |
+| **Nitidez** | Máscara de enfoque sobre la luminancia (realza detalles sin halos de color). |
+| **Saturación** | Colores más vivos (+) o más apagados (−). |
+| **Mejorar contraste** | Estira automáticamente los niveles de la imagen. |
+
+Usa el deslizador sobre la imagen para comparar **antes / después** y
+descarga el resultado en PNG.
+
+### ✏️ Vectorizar (SVG)
+
+Convierte la imagen en formas vectoriales: el SVG se puede ampliar a
+**cualquier tamaño sin perder calidad** (ideal para logos, iconos, dibujos o
+para imprimir en grande).
+
+- **Preajustes:** logo, ilustración, fotografía o blanco y negro.
+- **Colores:** cuántos colores tendrá el resultado (2–64).
+- **Detalle:** resolución a la que se analiza la imagen (más = más fiel, más pesado).
+- **Eliminar manchas:** quita puntitos y ruido menores de ese tamaño.
+- **Simplificación:** más alta = menos nodos y archivo más ligero.
+- **Suavizar entrada:** útil con fotos o JPEG con ruido.
+- **Esquinas nítidas:** ángulos menores que este valor se mantienen en punta; el resto se redondea con curvas.
+- **Limpiar bordes:** elimina los halos de colores intermedios que deja el antialiasing.
+- **Vectorizar la imagen mejorada:** primero mejora la imagen y luego vectoriza el resultado.
+
+Descarga el **SVG** o un **PNG de alta resolución** (×1 a ×8) renderizado
+desde el vector, perfecto para ampliar logos pequeños sin pixelado.
+
+## Cómo funciona
+
+- `enhancer.js` — filtro bilateral → Lanczos-3 → unsharp mask → niveles/saturación.
+- `vectorizer.js` — cuantización de color k-means → limpieza de bordes y manchas
+  → trazado de contornos por capas apiladas (sin huecos entre colores)
+  → suavizado y simplificación (Ramer–Douglas–Peucker) → curvas Bézier.
+- `app.js` — interfaz, carga de imágenes y descargas.
+
+> Nota: la mejora usa algoritmos clásicos de procesamiento de imagen, no
+> inteligencia artificial. No "inventa" detalles que no existen, pero da una
+> ampliación limpia y nítida. Para la máxima calidad en logos y dibujos,
+> vectoriza la imagen y exporta el PNG a la resolución que necesites.
