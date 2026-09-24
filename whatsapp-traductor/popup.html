@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: system-ui, sans-serif; width: 260px; padding: 12px; margin: 0; }
+    h1 { font-size: 15px; margin: 0 0 12px; color: #00a884; }
+    label { display: block; font-size: 13px; margin-bottom: 10px; }
+    select { width: 100%; margin-top: 4px; padding: 4px; }
+    .check { display: flex; gap: 6px; align-items: center; }
+    p { font-size: 11px; color: #666; margin: 8px 0 0; }
+    #saved { color: #00a884; font-size: 12px; height: 14px; }
+  </style>
+</head>
+<body>
+  <h1>🌐 Traductor WhatsApp</h1>
+  <label>Mi idioma (traducir mensajes a):
+    <select id="myLang"></select>
+  </label>
+  <label>Idioma del contacto (traducir lo que escribo a):
+    <select id="theirLang"></select>
+  </label>
+  <label class="check"><input type="checkbox" id="autoTranslate" /> Traducir automáticamente los mensajes recibidos</label>
+  <div id="saved"></div>
+  <p>Pulsa 🌐 junto a un mensaje para traducirlo. Escribe tu respuesta y pulsa <b>🌐→</b> o <b>Ctrl+Shift+T</b> para traducirla antes de enviar.</p>
+  <script src="popup.js"></script>
+</body>
+</html>

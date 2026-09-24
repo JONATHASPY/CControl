@@ -1,0 +1,47 @@
+div.message-in, div.message-out { position: relative; }
+
+.wat-btn {
+  position: absolute;
+  top: 2px;
+  border: none;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  line-height: 24px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.35;
+  z-index: 5;
+}
+div.message-in .wat-btn { right: -30px; }
+div.message-out .wat-btn { left: -30px; }
+.wat-btn:hover { opacity: 1; }
+.wat-btn:disabled { cursor: wait; }
+
+.wat-result {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(128, 128, 128, 0.5);
+  font-style: italic;
+  white-space: pre-wrap;
+  opacity: 0.85;
+}
+.wat-error { color: #d33; }
+
+.wat-compose-btn {
+  position: absolute;
+  right: 8px;
+  top: -34px;
+  border: none;
+  border-radius: 16px;
+  padding: 4px 10px;
+  background: #00a884;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.wat-compose-btn:hover { background: #008f6f; }
