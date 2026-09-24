@@ -70,9 +70,24 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 2. Cuantización k-means.
-  // Distancia con pesos aproximadamente perceptuales.
-  const WR = 2, WG = 4, WB = 3;
+  // 2. Cuantización k-means en el espacio de color CIELAB, donde la distancia
+  // se parece a la diferencia que percibe el ojo: los colores se agrupan
+  // como los agruparía una persona.
+  const SRGB_TO_LINEAR = new Float64Array(256);
+  for (let i = 0; i < 256; i++) {
+    const c = i / 255;
+    SRGB_TO_LINEAR[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+  function labF(t) { return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116; }
+  function rgbToLab(r, g, b, out, o) {
+    const R = SRGB_TO_LINEAR[r], G = SRGB_TO_LINEAR[g], B = SRGB_TO_LINEAR[b];
+    const fx = labF((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047);
+    const fy = labF(0.2126 * R + 0.7152 * G + 0.0722 * B);
+    const fz = labF((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883);
+    out[o] = 116 * fy - 16;
+    out[o + 1] = 500 * (fx - fy);
+    out[o + 2] = 200 * (fy - fz);
+  }
 
   function makeRandom(seed) {
     let s = seed >>> 0;
@@ -97,7 +112,8 @@
     const sample = [];
     for (let i = 0; i < opaque.length; i += step) {
       const j = opaque[i] * 4;
-      sample.push(data[j], data[j + 1], data[j + 2]);
+      sample.push(0, 0, 0);
+      rgbToLab(data[j], data[j + 1], data[j + 2], sample, sample.length - 3);
     }
     const m = sample.length / 3;
     k = Math.max(1, Math.min(k, m));
@@ -113,7 +129,7 @@
       const cr = centers[(c - 1) * 3], cg = centers[(c - 1) * 3 + 1], cb = centers[(c - 1) * 3 + 2];
       for (let i = 0; i < m; i++) {
         const dr = sample[i * 3] - cr, dg = sample[i * 3 + 1] - cg, db = sample[i * 3 + 2] - cb;
-        const d = WR * dr * dr + WG * dg * dg + WB * db * db;
+        const d = dr * dr + dg * dg + db * db;
         if (d < dist[i]) dist[i] = d;
         total += dist[i];
       }
@@ -129,7 +145,7 @@
       let best = 0, bestD = Infinity;
       for (let c = 0; c < k; c++) {
         const dr = r - centers[c * 3], dg = g - centers[c * 3 + 1], db = b - centers[c * 3 + 2];
-        const d = WR * dr * dr + WG * dg * dg + WB * db * db;
+        const d = dr * dr + dg * dg + db * db;
         if (d < bestD) { bestD = d; best = c; }
       }
       return best;
@@ -140,9 +156,9 @@
     for (let iter = 0; iter < 12; iter++) {
       sums.fill(0);
       for (let i = 0; i < m; i++) {
-        const r = sample[i * 3], g = sample[i * 3 + 1], b = sample[i * 3 + 2];
-        const c = nearest(r, g, b);
-        sums[c * 4] += r; sums[c * 4 + 1] += g; sums[c * 4 + 2] += b; sums[c * 4 + 3]++;
+        const L = sample[i * 3], A = sample[i * 3 + 1], B = sample[i * 3 + 2];
+        const c = nearest(L, A, B);
+        sums[c * 4] += L; sums[c * 4 + 1] += A; sums[c * 4 + 2] += B; sums[c * 4 + 3]++;
       }
       let moved = 0;
       for (let c = 0; c < k; c++) {
@@ -154,17 +170,22 @@
           centers[c * 3 + ch] = v;
         }
       }
-      if (moved < 0.5) break;
+      if (moved < 0.1) break;
     }
 
     // Asignación de todos los píxeles (con caché por color).
     const cache = new Map();
+    const lab = [0, 0, 0];
     const finalSums = new Float64Array(k * 4);
     for (const p of opaque) {
       const j = p * 4;
       const key = (data[j] << 16) | (data[j + 1] << 8) | data[j + 2];
       let c = cache.get(key);
-      if (c === undefined) { c = nearest(data[j], data[j + 1], data[j + 2]); cache.set(key, c); }
+      if (c === undefined) {
+        rgbToLab(data[j], data[j + 1], data[j + 2], lab, 0);
+        c = nearest(lab[0], lab[1], lab[2]);
+        cache.set(key, c);
+      }
       labels[p] = c;
       finalSums[c * 4] += data[j]; finalSums[c * 4 + 1] += data[j + 1]; finalSums[c * 4 + 2] += data[j + 2];
       finalSums[c * 4 + 3]++;
@@ -467,8 +488,17 @@
   }
 
   function simplifyClosed(pts, tolerance) {
+    const idx = simplifyClosedIndices(pts, tolerance);
+    const out = [];
+    for (const i of idx) out.push(pts[i * 2], pts[i * 2 + 1]);
+    return out;
+  }
+
+  // Devuelve los índices de los vértices que se conservan.
+  function simplifyClosedIndices(pts, tolerance) {
     const n = pts.length / 2;
-    if (n <= 4 || tolerance <= 0) return pts;
+    const all = () => Array.from({ length: n }, (_, i) => i);
+    if (n <= 4 || tolerance <= 0) return all();
     // Punto más lejano al primero para dividir el contorno en dos mitades.
     let far = 0, farD = -1;
     for (let i = 1; i < n; i++) {
@@ -483,8 +513,8 @@
     rdp(ext, 0, far, tol2, keep);
     rdp(ext, far, n, tol2, keep);
     const out = [];
-    for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i * 2], pts[i * 2 + 1]);
-    return out.length >= 6 ? out : pts;
+    for (let i = 0; i < n; i++) if (keep[i]) out.push(i);
+    return out.length >= 3 ? out : all();
   }
 
   // ---------------------------------------------------------------------------
@@ -516,6 +546,174 @@
       else d += 'Q' + fmt(cur[0]) + ' ' + fmt(cur[1]) + ' ' + fmt(m[0]) + ' ' + fmt(m[1]);
     }
     return d + 'Z';
+  }
+
+
+  // ---------------------------------------------------------------------------
+  // 6b. Ajuste de curvas Bézier cúbicas (algoritmo de Philip J. Schneider,
+  // "An Algorithm for Automatically Fitting Digitized Curves", Graphics Gems).
+  // Se ajustan curvas a los puntos del contorno con un error máximo dado; las
+  // esquinas se respetan y en el resto de uniones la tangente es continua.
+  function v2sub(a, b) { return [a[0] - b[0], a[1] - b[1]]; }
+  function v2add(a, b) { return [a[0] + b[0], a[1] + b[1]]; }
+  function v2scale(a, s) { return [a[0] * s, a[1] * s]; }
+  function v2dot(a, b) { return a[0] * b[0] + a[1] * b[1]; }
+  function v2len(a) { return Math.hypot(a[0], a[1]); }
+  function v2norm(a) { const l = v2len(a); return l > 1e-12 ? [a[0] / l, a[1] / l] : [0, 0]; }
+
+  function bezierPoint(bez, t) {
+    const mt = 1 - t, a = mt * mt * mt, b = 3 * mt * mt * t, c = 3 * mt * t * t, d = t * t * t;
+    return [
+      a * bez[0][0] + b * bez[1][0] + c * bez[2][0] + d * bez[3][0],
+      a * bez[0][1] + b * bez[1][1] + c * bez[2][1] + d * bez[3][1],
+    ];
+  }
+
+  function chordParams(P, first, last) {
+    const u = [0];
+    for (let i = first + 1; i <= last; i++) u.push(u[u.length - 1] + v2len(v2sub(P[i], P[i - 1])));
+    const total = u[u.length - 1] || 1;
+    return u.map((x) => x / total);
+  }
+
+  function generateBezier(P, first, last, u, t1, t2) {
+    const p0 = P[first], p3 = P[last];
+    let c00 = 0, c01 = 0, c11 = 0, x0 = 0, x1 = 0;
+    for (let i = 0; i < u.length; i++) {
+      const t = u[i], mt = 1 - t;
+      const b0 = mt * mt * mt, b1 = 3 * mt * mt * t, b2 = 3 * mt * t * t, b3 = t * t * t;
+      const a1 = v2scale(t1, b1), a2 = v2scale(t2, b2);
+      c00 += v2dot(a1, a1); c01 += v2dot(a1, a2); c11 += v2dot(a2, a2);
+      const tmp = v2sub(P[first + i], v2add(v2scale(p0, b0 + b1), v2scale(p3, b2 + b3)));
+      x0 += v2dot(a1, tmp); x1 += v2dot(a2, tmp);
+    }
+    const det = c00 * c11 - c01 * c01;
+    let alpha1 = 0, alpha2 = 0;
+    if (Math.abs(det) > 1e-12) {
+      alpha1 = (x0 * c11 - x1 * c01) / det;
+      alpha2 = (c00 * x1 - c01 * x0) / det;
+    }
+    const segLen = v2len(v2sub(p3, p0));
+    const eps = 1e-6 * segLen;
+    if (!(alpha1 > eps) || !(alpha2 > eps) || alpha1 > segLen * 2 || alpha2 > segLen * 2) {
+      alpha1 = alpha2 = segLen / 3; // heurística de Wu/Barsky
+    }
+    return [p0, v2add(p0, v2scale(t1, alpha1)), v2add(p3, v2scale(t2, alpha2)), p3];
+  }
+
+  function maxError(P, first, last, bez, u) {
+    let max = 0, split = Math.floor((first + last) / 2);
+    for (let i = first + 1; i < last; i++) {
+      const d = v2sub(bezierPoint(bez, u[i - first]), P[i]);
+      const e = v2dot(d, d);
+      if (e >= max) { max = e; split = i; }
+    }
+    return [max, split];
+  }
+
+  // Un paso de Newton-Raphson para afinar el parámetro de cada punto.
+  function reparameterize(P, first, bez, u) {
+    const d1 = [v2scale(v2sub(bez[1], bez[0]), 3), v2scale(v2sub(bez[2], bez[1]), 3), v2scale(v2sub(bez[3], bez[2]), 3)];
+    const d2 = [v2scale(v2sub(d1[1], d1[0]), 2), v2scale(v2sub(d1[2], d1[1]), 2)];
+    return u.map((t, i) => {
+      const mt = 1 - t;
+      const q = bezierPoint(bez, t);
+      const q1 = [mt * mt * d1[0][0] + 2 * mt * t * d1[1][0] + t * t * d1[2][0], mt * mt * d1[0][1] + 2 * mt * t * d1[1][1] + t * t * d1[2][1]];
+      const q2 = [mt * d2[0][0] + t * d2[1][0], mt * d2[0][1] + t * d2[1][1]];
+      const diff = v2sub(q, P[first + i]);
+      const den = v2dot(q1, q1) + v2dot(diff, q2);
+      if (Math.abs(den) < 1e-12) return t;
+      return Math.min(1, Math.max(0, t - v2dot(diff, q1) / den));
+    });
+  }
+
+  function fitCubic(P, first, last, t1, t2, err2, out, depth) {
+    if (last - first === 1 || depth > 24) {
+      const dist = v2len(v2sub(P[last], P[first])) / 3;
+      out.push([P[first], v2add(P[first], v2scale(t1, dist)), v2add(P[last], v2scale(t2, dist)), P[last]]);
+      return;
+    }
+    let u = chordParams(P, first, last);
+    let bez = generateBezier(P, first, last, u, t1, t2);
+    let [err, split] = maxError(P, first, last, bez, u);
+    if (err < err2) { out.push(bez); return; }
+    if (err < err2 * 4) {
+      for (let i = 0; i < 4; i++) {
+        u = reparameterize(P, first, bez, u);
+        bez = generateBezier(P, first, last, u, t1, t2);
+        [err, split] = maxError(P, first, last, bez, u);
+        if (err < err2) { out.push(bez); return; }
+      }
+    }
+    split = Math.min(last - 1, Math.max(first + 1, split));
+    let center = v2norm(v2sub(P[split - 1], P[split + 1]));
+    if (center[0] === 0 && center[1] === 0) center = v2norm(v2sub(P[split - 1], P[split]));
+    fitCubic(P, first, split, t1, center, err2, out, depth + 1);
+    fitCubic(P, split, last, v2scale(center, -1), t2, err2, out, depth + 1);
+  }
+
+  /**
+   * Convierte un contorno cerrado en un path. `raw` son los vértices del
+   * borde de píxeles y `flat` los mismos puntos ya suavizados (mismo orden).
+   * Devuelve { d, nodes }.
+   */
+  function fitLoop(raw, flat, tolerance, cornerCos) {
+    const n = flat.length / 2;
+    const P = [];
+    for (let i = 0; i < n; i++) P.push([flat[i * 2], flat[i * 2 + 1]]);
+    // Vértices principales (RDP sobre el contorno sin suavizar) para
+    // localizar las esquinas; en ellas se recupera la posición exacta.
+    const key = simplifyClosedIndices(raw, Math.max(tolerance, 0.75));
+    const m = key.length;
+    const corners = [];
+    for (let k = 0; k < m; k++) {
+      // El ángulo se mide con puntos a unos píxeles de distancia a cada lado:
+      // así un escalón de píxeles en una curva no cuenta como esquina, pero
+      // una esquina real sí.
+      const R = (i) => [raw[(((i % n) + n) % n) * 2], raw[(((i % n) + n) % n) * 2 + 1]];
+      const i0 = key[k];
+      const reach = Math.max(2, Math.min(Math.round(3 + tolerance * 2), Math.floor(n / 4)));
+      const a = R(i0 - reach), b = R(i0), c = R(i0 + reach);
+      const u = v2sub(a, b), v = v2sub(c, b);
+      const cos = v2dot(u, v) / ((v2len(u) * v2len(v)) || 1);
+      if (cos > cornerCos) corners.push(key[k]);
+    }
+    const isCorner = new Set(corners);
+    for (const i of corners) P[i] = [raw[i * 2], raw[i * 2 + 1]];
+    // Puntos de corte: todas las esquinas; si hay menos de dos, se añaden
+    // vértices principales alejados (uniones suaves).
+    let breaks = corners.slice();
+    if (breaks.length < 2) {
+      const extra = [key[0], key[Math.floor(m / 3)], key[Math.floor((2 * m) / 3)]];
+      for (const e of extra) if (!isCorner.has(e) && breaks.indexOf(e) < 0) breaks.push(e);
+      breaks.sort((x, y) => x - y);
+    }
+    const tangentAt = (i, forward) => {
+      const at = (j) => P[((j % n) + n) % n];
+      if (isCorner.has(i)) {
+        // Tangente de un solo lado.
+        return forward ? v2norm(v2sub(at(i + 2), at(i))) : v2norm(v2sub(at(i - 2), at(i)));
+      }
+      const t = v2norm(v2sub(at(i + 2), at(i - 2)));
+      return forward ? t : v2scale(t, -1);
+    };
+    const err2 = Math.max(0.25, tolerance * tolerance);
+    const segs = [];
+    for (let b = 0; b < breaks.length; b++) {
+      const s = breaks[b], e = breaks[(b + 1) % breaks.length];
+      const len = e > s ? e - s : e + n - s;
+      if (len <= 0) continue;
+      const pts = [];
+      for (let k = 0; k <= len; k++) pts.push(P[(s + k) % n]);
+      if (pts.length === 2) { segs.push([pts[0], pts[0], pts[1], pts[1]]); continue; }
+      fitCubic(pts, 0, pts.length - 1, tangentAt(s, true), tangentAt(e, false), err2, segs, 0);
+    }
+    if (segs.length === 0) return { d: '', nodes: 0 };
+    let d = 'M' + fmt(segs[0][0][0]) + ' ' + fmt(segs[0][0][1]);
+    for (const z of segs) {
+      d += 'C' + fmt(z[1][0]) + ' ' + fmt(z[1][1]) + ' ' + fmt(z[2][0]) + ' ' + fmt(z[2][1]) + ' ' + fmt(z[3][0]) + ' ' + fmt(z[3][1]);
+    }
+    return { d: d + 'Z', nodes: segs.length };
   }
 
   function hex(c) {
@@ -604,9 +802,16 @@
       const loops = traceMask((p) => pixRank[p] >= r, width, height);
       let d = '';
       for (const loop of loops) {
-        const simple = simplifyClosed(o.tolerance > 0 ? smoothLoop(loop, 2, width, height) : loop, o.tolerance);
-        nodeCount += simple.length / 2;
-        d += loopToPath(simple, o.smooth, cornerCos);
+        const dense = o.tolerance > 0 ? smoothLoop(loop, 2, width, height) : loop;
+        if (o.smooth && o.tolerance > 0 && dense.length >= 16) {
+          const fitted = fitLoop(loop, dense, o.tolerance, cornerCos);
+          nodeCount += fitted.nodes;
+          d += fitted.d;
+        } else {
+          const simple = simplifyClosed(dense, o.tolerance);
+          nodeCount += simple.length / 2;
+          d += loopToPath(simple, false, cornerCos);
+        }
       }
       if (!d) continue;
       layers.push({ color: hex(palette[order[r]]), d, area: area[order[r]] / labels.length });

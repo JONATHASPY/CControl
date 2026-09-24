@@ -118,6 +118,16 @@
   <!-- ===================== MEJORAR CALIDAD ===================== -->
   <section class="panel" id="panel-enhance" role="tabpanel" hidden>
     <div class="controls">
+      <label for="e-method">Método
+        <select id="e-method">
+          <option value="ai" selected>Inteligencia artificial (mejor calidad)</option>
+          <option value="classic">Rápido (sin IA)</option>
+        </select>
+      </label>
+      <p class="hint" id="e-method-hint">La IA reconstruye bordes y texturas. Tarda más: de segundos a un minuto según el tamaño.</p>
+      <label for="e-ai" id="e-ai-row">Intensidad de la IA <output id="e-ai-v">100</output>%
+        <input type="range" id="e-ai" min="0" max="100" step="5" value="100">
+      </label>
       <label for="e-mode">Tipo de imagen
         <select id="e-mode">
           <option value="photo" selected>Fotografía</option>
@@ -135,11 +145,11 @@
           <option value="4">×4</option>
         </select>
       </label>
-      <label for="e-denoise">Reducir ruido <output id="e-denoise-v">25</output>
-        <input type="range" id="e-denoise" min="0" max="100" value="25">
+      <label for="e-denoise">Reducir ruido <output id="e-denoise-v">10</output>
+        <input type="range" id="e-denoise" min="0" max="100" value="10">
       </label>
-      <label for="e-sharpen">Nitidez <output id="e-sharpen-v">45</output>
-        <input type="range" id="e-sharpen" min="0" max="100" value="45">
+      <label for="e-sharpen">Nitidez extra <output id="e-sharpen-v">20</output>
+        <input type="range" id="e-sharpen" min="0" max="100" value="20">
       </label>
       <label for="e-sat">Saturación <output id="e-sat-v">5</output>
         <input type="range" id="e-sat" min="-50" max="50" value="5">
@@ -182,6 +192,7 @@
 <!--APP-END-->
   <script src="enhancer.js"></script>
   <script src="vectorizer.js"></script>
+  <script src="ai-upscaler.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

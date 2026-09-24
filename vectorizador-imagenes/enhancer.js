@@ -231,28 +231,35 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Niveles automáticos (mismo estiramiento en los 3 canales: sin dominantes).
+  // Niveles automáticos: mismo estiramiento en los 3 canales (sin dominantes
+  // de color). Los límites se miden con el canal más oscuro y el más claro
+  // de cada píxel, así ningún canal se recorta.
   function autoLevels(data) {
-    const hist = new Uint32Array(256);
+    const histLo = new Uint32Array(256), histHi = new Uint32Array(256);
     let count = 0;
     for (let i = 0; i < data.length; i += 4) {
       if (data[i + 3] < 128) continue;
-      const l = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) | 0;
-      hist[l]++;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      histLo[Math.min(r, g, b)]++;
+      histHi[Math.max(r, g, b)]++;
       count++;
     }
     if (count === 0) return;
-    const cut = count * 0.005;
+    const cut = count * 0.003;
     let lo = 0, hi = 255, acc = 0;
-    for (; lo < 255; lo++) { acc += hist[lo]; if (acc > cut) break; }
+    for (; lo < 255; lo++) { acc += histLo[lo]; if (acc > cut) break; }
     acc = 0;
-    for (; hi > 0; hi--) { acc += hist[hi]; if (acc > cut) break; }
-    if (hi - lo < 16 || (lo < 3 && hi > 252)) return;
-    const k = 255 / (hi - lo);
+    for (; hi > 0; hi--) { acc += histHi[hi]; if (acc > cut) break; }
+    if (hi - lo < 32 || (lo < 4 && hi > 251)) return;
+    // Estiramiento a medias: el punto más oscuro baja la mitad de lo que le
+    // falta para el negro y el más claro sube la mitad hacia el blanco. Así
+    // mejora el contraste sin saturar ni quemar los colores.
+    const newLo = lo * 0.5, newHi = hi + (255 - hi) * 0.5;
+    const k = (newHi - newLo) / (hi - lo);
     for (let i = 0; i < data.length; i += 4) {
-      data[i] = (data[i] - lo) * k;
-      data[i + 1] = (data[i + 1] - lo) * k;
-      data[i + 2] = (data[i + 2] - lo) * k;
+      data[i] = newLo + (data[i] - lo) * k;
+      data[i + 1] = newLo + (data[i + 1] - lo) * k;
+      data[i + 2] = newLo + (data[i + 2] - lo) * k;
     }
   }
 

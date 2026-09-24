@@ -254,6 +254,9 @@
     }
     cancelJob('vector');
     cancelJob('enhance');
+    enhanceRun++;
+    if (aiToken) aiToken.cancelled = true;
+    showProgress('e', false);
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
@@ -371,24 +374,94 @@
 
   // ---------------------------------------------------------------------------
   // Mejorar calidad
+  // Ajustes por tipo de imagen. Con IA hace falta menos reducción de ruido y
+  // menos enfoque: la red ya reconstruye los detalles.
   const E_MODES = {
-    photo:        { denoise: 25, sharpen: 45, sat: 5,  levels: true },
-    old:          { denoise: 60, sharpen: 35, sat: 10, levels: true },
-    illustration: { denoise: 10, sharpen: 70, sat: 0,  levels: true },
-    screen:       { denoise: 0,  sharpen: 80, sat: 0,  levels: false },
+    photo:        { ai: { denoise: 30, sharpen: 10, sat: 5,  ai: 80 },  classic: { denoise: 25, sharpen: 45, sat: 5,  ai: 100 }, levels: true },
+    old:          { ai: { denoise: 55, sharpen: 15, sat: 10, ai: 70 },  classic: { denoise: 60, sharpen: 35, sat: 10, ai: 100 }, levels: true },
+    illustration: { ai: { denoise: 20, sharpen: 10, sat: 0,  ai: 100 }, classic: { denoise: 10, sharpen: 70, sat: 0,  ai: 100 }, levels: false },
+    screen:       { ai: { denoise: 0,  sharpen: 15, sat: 0,  ai: 100 }, classic: { denoise: 0,  sharpen: 80, sat: 0,  ai: 100 }, levels: false },
   };
-  const eOutputs = { denoise: bindOutput('e-denoise'), sharpen: bindOutput('e-sharpen'), sat: bindOutput('e-sat') };
-  $('e-mode').addEventListener('change', (e) => {
-    const m = E_MODES[e.target.value];
+  const eOutputs = { denoise: bindOutput('e-denoise'), sharpen: bindOutput('e-sharpen'), sat: bindOutput('e-sat'), ai: bindOutput('e-ai') };
+  function applyEnhanceMode() {
+    const m = E_MODES[$('e-mode').value];
     if (!m) return;
-    for (const k of Object.keys(eOutputs)) { $('e-' + k).value = m[k]; eOutputs[k](); }
+    const v = m[$('e-method').value];
+    for (const k of Object.keys(eOutputs)) { $('e-' + k).value = v[k]; eOutputs[k](); }
     $('e-levels').checked = m.levels;
+  }
+  $('e-mode').addEventListener('change', applyEnhanceMode);
+  $('e-method').addEventListener('change', () => {
+    $('e-ai-row').hidden = $('e-method').value !== 'ai';
+    $('e-method-hint').textContent = $('e-method').value === 'ai'
+      ? 'La IA reconstruye bordes y texturas. Tarda más: de segundos a un minuto según el tamaño.'
+      : 'Ampliación clásica (Lanczos + enfoque). Es instantánea, pero no recupera detalles.';
+    applyEnhanceMode();
   });
-  ['e-denoise', 'e-sharpen', 'e-sat', 'e-levels'].forEach((id) =>
+  ['e-denoise', 'e-sharpen', 'e-sat', 'e-levels', 'e-ai'].forEach((id) =>
     $(id).addEventListener('input', () => { $('e-mode').value = 'custom'; }));
+  applyEnhanceMode();
+
+  // Reparte una barra de progreso entre varias fases.
+  const subProgress = (fn, a, b) => (f, t) => fn(a + (b - a) * f, t);
+
+  let enhanceRun = 0;
+  let aiToken = null;
+
+  async function enhanceWithAI(src, scale, settings, progress) {
+    // La red siempre amplía ×4; después se reduce al tamaño pedido. Con ×1
+    // la imagen sale al mismo tamaño pero más nítida y sin artefactos.
+    const aiScale = AIUpscaler.SCALE;
+    let input = src;
+    let pre = 1;
+    // Si la salida ×4 no cabe en memoria, se reduce antes la entrada.
+    const maxIn = Math.sqrt(MAX_PIXELS / (aiScale * aiScale) / (src.width * src.height));
+    if (maxIn < 1) {
+      pre = maxIn;
+      input = resizeImageData(src, Math.max(1, Math.floor(src.width * pre)), Math.max(1, Math.floor(src.height * pre)));
+    }
+    if (settings.denoise > 0) {
+      input = await runJob('enhance', input, { scale: 1, denoise: settings.denoise, sharpen: 0, autoLevels: false, saturation: 0 },
+        subProgress(progress, 0, 0.06));
+      input = { width: input.width, height: input.height, data: new Uint8ClampedArray(input.data.buffer || input.data) };
+    }
+    const token = aiToken = { cancelled: false };
+    const up = await AIUpscaler.upscale(input, {
+      onProgress: subProgress(progress, 0.06, 0.9),
+      isCancelled: () => token.cancelled,
+    });
+    // Intensidad < 100 %: mezcla el resultado de la IA con la ampliación
+    // clásica de la misma imagen (menos detalle inventado).
+    const strength = settings.aiStrength / 100;
+    if (strength < 1) {
+      const classic = await runJob('enhance', input, { scale: aiScale, denoise: 0, sharpen: 0, autoLevels: false, saturation: 0 },
+        subProgress(progress, 0.9, 0.93));
+      const c = new Uint8ClampedArray(classic.data.buffer || classic.data);
+      const a = up.data;
+      if (classic.width === up.width && classic.height === up.height) {
+        for (let i = 0; i < a.length; i += 4) {
+          a[i] = c[i] + (a[i] - c[i]) * strength;
+          a[i + 1] = c[i + 1] + (a[i + 1] - c[i + 1]) * strength;
+          a[i + 2] = c[i + 2] + (a[i + 2] - c[i + 2]) * strength;
+        }
+      }
+    }
+    const targetW = Math.round(src.width * scale);
+    const post = await runJob('enhance', up, {
+      scale: targetW / up.width,
+      denoise: 0,
+      sharpen: settings.sharpen,
+      autoLevels: settings.autoLevels,
+      saturation: settings.saturation,
+    }, subProgress(progress, 0.93, 1));
+    post.backend = up.backend;
+    return post;
+  }
 
   async function runEnhance() {
     if (!state.source) return;
+    const run = ++enhanceRun;
+    if (aiToken) aiToken.cancelled = true;
     const src = state.source;
     let scale = Number($('e-scale').value);
     const maxScale = Math.min(MAX_SIDE / Math.max(src.width, src.height), Math.sqrt(MAX_PIXELS / (src.width * src.height)));
@@ -397,18 +470,33 @@
       scale = Math.max(1, Math.floor(maxScale * 100) / 100);
       note = ` · ampliación limitada a ×${scale} por memoria`;
     }
+    const settings = {
+      denoise: Number($('e-denoise').value),
+      sharpen: Number($('e-sharpen').value),
+      saturation: Number($('e-sat').value),
+      autoLevels: $('e-levels').checked,
+      aiStrength: Number($('e-ai').value),
+    };
     showProgress('e', true);
     $('e-run').disabled = true;
+    const progress = progressFor('e');
     const t0 = performance.now();
+    let method = 'Rápido';
     try {
-      const out = await runJob('enhance', src, {
-        scale,
-        denoise: Number($('e-denoise').value),
-        sharpen: Number($('e-sharpen').value),
-        saturation: Number($('e-sat').value),
-        autoLevels: $('e-levels').checked,
-      }, progressFor('e'));
-      if (state.source !== src) return;
+      let out = null;
+      if ($('e-method').value === 'ai' && window.AIUpscaler && scale * 1 >= 1) {
+        try {
+          out = await enhanceWithAI(src, scale, settings, progress);
+          method = out.backend === 'webgl' ? 'IA' : 'IA (sin tarjeta gráfica, lento)';
+        } catch (err) {
+          if (err.cancelled) throw err;
+          console.error(err);
+          toast(err.message + ' Se usa el método rápido.');
+          note += ' · sin IA: ' + err.message;
+        }
+      }
+      if (!out) out = await runJob('enhance', src, Object.assign({ scale }, settings), progress);
+      if (state.source !== src || run !== enhanceRun) return;
       const data = new Uint8ClampedArray(out.data.buffer || out.data);
       const blob = await canvasToBlob(imageDataToCanvas({ width: out.width, height: out.height, data }));
       state.enhanced = new ImageData(data, out.width, out.height);
@@ -416,16 +504,23 @@
       setUrl($('e-after'), 'enhancedUrl', URL.createObjectURL(blob));
       $('e-download').disabled = false;
       const secs = ((performance.now() - t0) / 1000).toFixed(1);
-      $('e-status').textContent = `${src.width}×${src.height} → ${out.width}×${out.height} px · ${formatBytes(blob.size)} · ${secs} s${note}`;
+      $('e-status').textContent = `${method} · ${src.width}×${src.height} → ${out.width}×${out.height} px · ${formatBytes(blob.size)} · ${secs} s${note}`;
       if ($('v-use-enhanced').checked) scheduleVector();
     } catch (err) {
-      if (!err.cancelled) { console.error(err); $('e-status').textContent = 'Error: ' + err.message; }
+      if (!err.cancelled && run === enhanceRun) { console.error(err); $('e-status').textContent = 'Error: ' + err.message; }
     } finally {
-      if (!jobs.enhance) { showProgress('e', false); $('e-run').disabled = !state.source; }
+      if (run === enhanceRun) { showProgress('e', false); $('e-run').disabled = !state.source; }
     }
   }
   $('e-run').addEventListener('click', runEnhance);
-  $('e-cancel').addEventListener('click', () => { cancelJob('enhance'); $('e-status').textContent = 'Cancelado.'; });
+  $('e-cancel').addEventListener('click', () => {
+    enhanceRun++;
+    if (aiToken) aiToken.cancelled = true;
+    cancelJob('enhance');
+    showProgress('e', false);
+    $('e-run').disabled = !state.source;
+    $('e-status').textContent = 'Cancelado.';
+  });
   $('e-download').addEventListener('click', () => {
     if (state.enhancedBlob) download(state.enhancedBlob, `${state.name}-mejorada.png`);
   });

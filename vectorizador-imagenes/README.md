@@ -20,6 +20,15 @@ ves el progreso y puedes **cancelar**.
 
 ### ✨ Mejorar calidad
 
+Hay dos métodos:
+
+- **Inteligencia artificial (recomendado):** una red neuronal (ESRGAN/RRDN
+  entrenada como GAN) reconstruye bordes y texturas nítidas al ampliar. Se
+  ejecuta en la tarjeta gráfica del navegador con TensorFlow.js. Tarda de
+  unos segundos a un minuto según el tamaño y el equipo; verás el progreso y
+  el tiempo restante.
+- **Rápido (sin IA):** ampliación clásica, instantánea.
+
 | Opción | Qué hace |
 | --- | --- |
 | **Tipo de imagen** | Ajustes recomendados para foto, foto antigua, ilustración o captura de pantalla. |
@@ -54,13 +63,34 @@ para imprimir en grande).
 Descarga el **SVG**, copia su código o descarga un **PNG de alta resolución** (×1 a ×8) renderizado
 desde el vector, perfecto para ampliar logos pequeños sin pixelado.
 
+### La IA y el archivo `index.html`
+
+Por seguridad, los navegadores no dejan que una página abierta con doble
+clic (`file://`) lea el modelo de IA. Si abres `index.html` directamente,
+la mejora usará el método rápido. Para usar la IA en tu equipo, abre la
+carpeta con un servidor local, por ejemplo:
+
+```
+npx http-server vectorizador-imagenes
+```
+
+y entra en la dirección que muestra (normalmente http://127.0.0.1:8080).
+
 ## Cómo funciona
 
 - `enhancer.js` — filtro bilateral → Lanczos-3 → unsharp mask → niveles/saturación.
-- `vectorizer.js` — cuantización de color k-means → limpieza de bordes y manchas
-  → trazado de contornos por capas apiladas (sin huecos entre colores)
-  → suavizado y simplificación (Ramer–Douglas–Peucker) → curvas Bézier.
+- `vectorizer.js` — cuantización de color k-means en espacio CIELAB → limpieza
+  de bordes y manchas → trazado de contornos por capas apiladas (sin huecos
+  entre colores) → detección de esquinas → ajuste de curvas Bézier cúbicas
+  (algoritmo de Schneider).
+- `ai-upscaler.js` — superresolución ×4 con IA, por bloques solapados.
 - `app.js` — interfaz, carga de imágenes y descargas.
+
+## Licencias de terceros
+
+- `vendor/tf.min.js`: TensorFlow.js 4.22.0, © Google LLC, licencia Apache 2.0.
+- `models/esrgan-gans-x4/`: modelo «gans» de UpscalerJS (`@upscalerjs/esrgan-legacy`),
+  pesos de idealo/image-super-resolution; licencia MIT (ver `models/LICENSE-upscalerjs.txt`).
 
 > Nota: la mejora usa algoritmos clásicos de procesamiento de imagen, no
 > inteligencia artificial. No "inventa" detalles que no existen, pero da una
