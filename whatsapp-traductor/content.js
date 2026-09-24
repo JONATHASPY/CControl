@@ -135,3 +135,102 @@ document.addEventListener("keydown", (e) => {
     translateComposer();
   }
 }, true);
+
+// ---------- Seleccionar texto y traducirlo en un panel lateral ----------
+
+let selBtn = null;
+let panel = null;
+
+function getPanel() {
+  if (panel) return panel;
+  panel = document.createElement("div");
+  panel.className = "wat-panel";
+  panel.innerHTML = `
+    <div class="wat-panel-head">
+      <span>🌐 Traducciones</span>
+      <button class="wat-panel-clear" title="Borrar todo">🗑</button>
+      <button class="wat-panel-close" title="Cerrar">✕</button>
+    </div>
+    <div class="wat-panel-list"></div>`;
+  panel.querySelector(".wat-panel-close").addEventListener("click", () => panel.classList.remove("wat-open"));
+  panel.querySelector(".wat-panel-clear").addEventListener("click", () => {
+    panel.querySelector(".wat-panel-list").innerHTML = "";
+  });
+  document.body.appendChild(panel);
+  return panel;
+}
+
+async function translateToPanel(text) {
+  const p = getPanel();
+  p.classList.add("wat-open");
+
+  const item = document.createElement("div");
+  item.className = "wat-panel-item";
+  const original = document.createElement("div");
+  original.className = "wat-panel-original";
+  original.textContent = text;
+  const result = document.createElement("div");
+  result.className = "wat-panel-result";
+  result.textContent = "Traduciendo…";
+  item.append(original, result);
+  p.querySelector(".wat-panel-list").prepend(item);
+
+  try {
+    const res = await translate(text, settings.myLang);
+    result.textContent = res.text;
+    original.title = `Idioma original: ${res.detected}`;
+    const copy = document.createElement("button");
+    copy.className = "wat-panel-copy";
+    copy.textContent = "Copiar";
+    copy.addEventListener("click", () => {
+      navigator.clipboard.writeText(res.text);
+      copy.textContent = "✓ Copiado";
+      setTimeout(() => (copy.textContent = "Copiar"), 1200);
+    });
+    item.appendChild(copy);
+  } catch (e) {
+    result.textContent = "Error al traducir: " + e;
+    result.classList.add("wat-error");
+  }
+}
+
+function hideSelButton() {
+  if (selBtn) selBtn.style.display = "none";
+}
+
+function showSelButton(text, rect) {
+  if (!selBtn) {
+    selBtn = document.createElement("button");
+    selBtn.className = "wat-sel-btn";
+    selBtn.textContent = "🌐 Traducir";
+    // Evita que el clic borre la selección antes de leerla.
+    selBtn.addEventListener("mousedown", (e) => e.preventDefault());
+    selBtn.addEventListener("click", () => {
+      hideSelButton();
+      translateToPanel(selBtn.dataset.text);
+    });
+    document.body.appendChild(selBtn);
+  }
+  selBtn.dataset.text = text;
+  selBtn.style.display = "block";
+  selBtn.style.top = `${Math.max(rect.top - 36, 4)}px`;
+  selBtn.style.left = `${Math.min(rect.left + rect.width / 2 - 45, window.innerWidth - 110)}px`;
+}
+
+document.addEventListener("mouseup", (e) => {
+  if (selBtn && selBtn.contains(e.target)) return;
+  setTimeout(() => {
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : "";
+    const node = sel && sel.anchorNode;
+    const el = node && (node.nodeType === 1 ? node : node.parentElement);
+    // No mostrar el botón si se selecciona en la caja de texto o en el propio panel.
+    if (!text || !el || el.closest('footer, [contenteditable="true"], .wat-panel')) {
+      hideSelButton();
+      return;
+    }
+    showSelButton(text, sel.getRangeAt(0).getBoundingClientRect());
+  }, 0);
+});
+
+document.addEventListener("scroll", hideSelButton, true);

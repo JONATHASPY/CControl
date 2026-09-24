@@ -7,6 +7,9 @@ WhatsApp Web directamente en el chat.
 
 - **Traducir mensajes:** aparece un botón 🌐 al lado de cada mensaje. Un clic
   muestra la traducción debajo del texto (otro clic la oculta).
+- **Seleccionar y traducir:** selecciona con el ratón cualquier parte de un
+  mensaje y pulsa **🌐 Traducir**. La traducción aparece en un panel a la
+  derecha de la pantalla (con historial y botón *Copiar*); ciérralo con ✕.
 - **Traducir lo que escribes:** escribe tu respuesta en tu idioma y pulsa el
   botón **🌐→** (encima de la caja de texto) o **Ctrl+Shift+T**. El texto se
   reemplaza por la traducción, lista para enviar.
