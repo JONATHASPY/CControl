@@ -9,13 +9,20 @@ conexión y tus imágenes no se suben a ningún servidor.
 ## Cómo usarla
 
 1. Abre `index.html` con Chrome, Edge, Firefox o Safari (doble clic).
+   Se abre con una imagen de ejemplo ya procesada.
 2. Arrastra una imagen, pégala con **Ctrl+V** o pulsa *elige un archivo*.
 3. Elige la pestaña:
+
+En ambas pestañas puedes arrastrar sobre la imagen para comparar
+**original / resultado** y usar el **zoom** (hasta 800 %) para revisar los
+detalles. El procesamiento corre en segundo plano: la página no se congela,
+ves el progreso y puedes **cancelar**.
 
 ### ✨ Mejorar calidad
 
 | Opción | Qué hace |
 | --- | --- |
+| **Tipo de imagen** | Ajustes recomendados para foto, foto antigua, ilustración o captura de pantalla. |
 | **Ampliar ×1–×4** | Aumenta la resolución con remuestreo Lanczos-3 (más nítido que el reescalado normal). |
 | **Reducir ruido** | Filtro bilateral: suaviza el grano y los artefactos JPEG conservando los bordes. |
 | **Nitidez** | Máscara de enfoque sobre la luminancia (realza detalles sin halos de color). |
@@ -39,9 +46,12 @@ para imprimir en grande).
 - **Suavizar entrada:** útil con fotos o JPEG con ruido.
 - **Esquinas nítidas:** ángulos menores que este valor se mantienen en punta; el resto se redondea con curvas.
 - **Limpiar bordes:** elimina los halos de colores intermedios que deja el antialiasing.
-- **Vectorizar la imagen mejorada:** primero mejora la imagen y luego vectoriza el resultado.
+- **Quitar el fondo:** deja transparente el color que ocupa el borde de la imagen.
+- **Partir de la imagen mejorada:** primero mejora la imagen y luego vectoriza el resultado.
+- **Actualizar al cambiar opciones:** el SVG se recalcula solo al mover un control.
+- **Colores del SVG:** haz clic en cualquier color de la paleta para cambiarlo al instante.
 
-Descarga el **SVG** o un **PNG de alta resolución** (×1 a ×8) renderizado
+Descarga el **SVG**, copia su código o descarga un **PNG de alta resolución** (×1 a ×8) renderizado
 desde el vector, perfecto para ampliar logos pequeños sin pixelado.
 
 ## Cómo funciona

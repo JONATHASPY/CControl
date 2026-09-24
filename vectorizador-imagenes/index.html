@@ -2,131 +2,184 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Vectorizador y Mejorador de Imágenes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Vectorizador de Imágenes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header>
-    <h1>🖼️ Vectorizador y Mejorador de Imágenes</h1>
-    <p>Todo se procesa en tu navegador: tus imágenes no se suben a ningún sitio.</p>
+<!--APP-START-->
+<div class="app">
+  <header class="masthead">
+    <h1>Vectorizador de Imágenes</h1>
+    <p class="tagline">Convierte fotos y dibujos en SVG y mejora su calidad. Todo ocurre en tu navegador: las imágenes no se suben a ningún servidor.</p>
   </header>
 
-  <main>
-    <section id="drop" class="drop" tabindex="0">
-      <input type="file" id="file" accept="image/*" hidden>
-      <p><strong>Arrastra una imagen aquí</strong>, pégala con <kbd>Ctrl</kbd>+<kbd>V</kbd>
-        o <button type="button" id="pick" class="link">elige un archivo</button>.</p>
-      <p id="info" class="muted">PNG, JPG, WebP, GIF, BMP…</p>
-    </section>
+  <section id="drop" class="drop" tabindex="0" aria-label="Cargar imagen">
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="drop-text">
+      <span><strong>Arrastra una imagen aquí</strong>, pégala con <kbd>Ctrl</kbd>+<kbd>V</kbd>
+      o <button type="button" id="pick" class="link">elige un archivo</button>.</span>
+      <span id="info" class="file-info">PNG, JPG, WebP, GIF o BMP</span>
+    </div>
+    <button type="button" id="sample" class="ghost">Usar imagen de ejemplo</button>
+  </section>
 
-    <nav class="tabs" role="tablist">
-      <button role="tab" class="tab active" data-tab="enhance" aria-selected="true">✨ Mejorar calidad</button>
-      <button role="tab" class="tab" data-tab="vector" aria-selected="false">✏️ Vectorizar (SVG)</button>
-    </nav>
+  <nav class="tabs" role="tablist">
+    <button role="tab" class="tab active" id="tab-vector" data-tab="vector" aria-selected="true">Vectorizar a SVG</button>
+    <button role="tab" class="tab" id="tab-enhance" data-tab="enhance" aria-selected="false">Mejorar calidad</button>
+  </nav>
 
-    <!-- ===================== MEJORAR CALIDAD ===================== -->
-    <section class="panel" id="panel-enhance">
-      <div class="controls">
-        <label>Ampliar
-          <select id="e-scale">
-            <option value="1">×1 (mismo tamaño)</option>
-            <option value="2" selected>×2</option>
-            <option value="3">×3</option>
-            <option value="4">×4</option>
-          </select>
-        </label>
-        <label>Reducir ruido <output id="e-denoise-v">20</output>
-          <input type="range" id="e-denoise" min="0" max="100" value="20">
-        </label>
-        <label>Nitidez <output id="e-sharpen-v">50</output>
-          <input type="range" id="e-sharpen" min="0" max="100" value="50">
-        </label>
-        <label>Saturación <output id="e-sat-v">0</output>
-          <input type="range" id="e-sat" min="-50" max="50" value="0">
-        </label>
-        <label class="check"><input type="checkbox" id="e-levels" checked> Mejorar contraste automáticamente</label>
-        <div class="actions">
-          <button type="button" id="e-run" class="primary" disabled>✨ Mejorar</button>
-          <button type="button" id="e-download" disabled>⬇️ Descargar PNG</button>
+  <!-- ===================== VECTORIZAR ===================== -->
+  <section class="panel" id="panel-vector" role="tabpanel">
+    <div class="controls">
+      <label for="v-preset">Tipo de imagen
+        <select id="v-preset">
+          <option value="logo">Logo o icono (pocos colores)</option>
+          <option value="illustration" selected>Ilustración o dibujo</option>
+          <option value="photo">Fotografía (muchos colores)</option>
+          <option value="bw">Blanco y negro</option>
+          <option value="custom">Personalizado</option>
+        </select>
+      </label>
+      <label for="v-colors">Colores <output id="v-colors-v">16</output>
+        <input type="range" id="v-colors" min="2" max="64" value="16">
+      </label>
+      <label for="v-size">Detalle <output id="v-size-v">1000</output> px
+        <input type="range" id="v-size" min="200" max="2000" step="100" value="1000">
+      </label>
+      <label for="v-speck">Quitar manchas menores de <output id="v-speck-v">10</output> px
+        <input type="range" id="v-speck" min="1" max="200" value="10">
+      </label>
+      <label for="v-tol">Simplificación <output id="v-tol-v">0.8</output>
+        <input type="range" id="v-tol" min="0" max="4" step="0.1" value="0.8">
+      </label>
+      <label for="v-blur">Suavizar entrada <output id="v-blur-v">0.4</output>
+        <input type="range" id="v-blur" min="0" max="3" step="0.1" value="0.4">
+      </label>
+      <label for="v-corner">Esquinas en punta por debajo de <output id="v-corner-v">100</output>°
+        <input type="range" id="v-corner" min="0" max="180" value="100">
+      </label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="v-smooth" checked> Curvas suaves</label>
+        <label class="check"><input type="checkbox" id="v-clean" checked> Limpiar bordes</label>
+        <label class="check"><input type="checkbox" id="v-nobg"> Quitar el fondo</label>
+        <label class="check"><input type="checkbox" id="v-use-enhanced"> Partir de la imagen mejorada</label>
+        <label class="check"><input type="checkbox" id="v-auto" checked> Actualizar al cambiar opciones</label>
+      </div>
+      <button type="button" id="v-run" class="primary" disabled>Vectorizar</button>
+    </div>
+
+    <div class="work">
+      <div class="progress" id="v-progress" hidden>
+        <div class="bar"><span id="v-progress-bar"></span></div>
+        <span id="v-progress-text" class="progress-text">Procesando…</span>
+        <button type="button" id="v-cancel" class="ghost small">Cancelar</button>
+      </div>
+      <div class="stage" id="v-stage">
+        <div class="compare" id="v-compare" hidden>
+          <img id="v-after" alt="Resultado vectorial">
+          <div class="before" id="v-before-wrap"><img id="v-before" alt="Imagen original"></div>
+          <div class="divider" aria-hidden="true"><span class="anchor"></span></div>
+          <span class="tag left">Original</span><span class="tag right">SVG</span>
         </div>
-        <p class="muted small" id="e-status"></p>
+        <p class="placeholder" id="v-placeholder">Carga una imagen para empezar.</p>
+      </div>
+      <div class="viewbar">
+        <label for="v-split" class="inline">Comparar <input type="range" id="v-split" min="0" max="100" value="50"></label>
+        <label for="v-zoom" class="inline">Zoom <output id="v-zoom-v">100</output>% <input type="range" id="v-zoom" min="100" max="800" step="25" value="100"></label>
+      </div>
+      <p class="status" id="v-status"></p>
+
+      <div class="palette-block" id="v-palette-block" hidden>
+        <h2>Colores del SVG <span class="hint">Haz clic en un color para cambiarlo</span></h2>
+        <div class="palette" id="v-palette"></div>
       </div>
 
-      <div class="viewer">
+      <div class="export">
+        <button type="button" id="v-download" disabled>Descargar SVG</button>
+        <button type="button" id="v-copy" disabled>Copiar código SVG</button>
+        <span class="inline-group">
+          <select id="v-png-scale" aria-label="Escala del PNG">
+            <option value="1">×1</option>
+            <option value="2">×2</option>
+            <option value="4" selected>×4</option>
+            <option value="8">×8</option>
+          </select>
+          <button type="button" id="v-download-png" disabled>Descargar PNG</button>
+        </span>
+      </div>
+      <p class="hint">Si la descarga no empieza, haz clic derecho (o mantén pulsado) sobre la imagen y elige «Guardar imagen».</p>
+    </div>
+  </section>
+
+  <!-- ===================== MEJORAR CALIDAD ===================== -->
+  <section class="panel" id="panel-enhance" role="tabpanel" hidden>
+    <div class="controls">
+      <label for="e-mode">Tipo de imagen
+        <select id="e-mode">
+          <option value="photo" selected>Fotografía</option>
+          <option value="old">Foto antigua o con mucho ruido</option>
+          <option value="illustration">Ilustración o logo</option>
+          <option value="screen">Captura de pantalla o texto</option>
+          <option value="custom">Personalizado</option>
+        </select>
+      </label>
+      <label for="e-scale">Ampliar
+        <select id="e-scale">
+          <option value="1">×1 (mismo tamaño)</option>
+          <option value="2" selected>×2</option>
+          <option value="3">×3</option>
+          <option value="4">×4</option>
+        </select>
+      </label>
+      <label for="e-denoise">Reducir ruido <output id="e-denoise-v">25</output>
+        <input type="range" id="e-denoise" min="0" max="100" value="25">
+      </label>
+      <label for="e-sharpen">Nitidez <output id="e-sharpen-v">45</output>
+        <input type="range" id="e-sharpen" min="0" max="100" value="45">
+      </label>
+      <label for="e-sat">Saturación <output id="e-sat-v">5</output>
+        <input type="range" id="e-sat" min="-50" max="50" value="5">
+      </label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="e-levels" checked> Mejorar contraste</label>
+      </div>
+      <button type="button" id="e-run" class="primary" disabled>Mejorar</button>
+    </div>
+
+    <div class="work">
+      <div class="progress" id="e-progress" hidden>
+        <div class="bar"><span id="e-progress-bar"></span></div>
+        <span id="e-progress-text" class="progress-text">Procesando…</span>
+        <button type="button" id="e-cancel" class="ghost small">Cancelar</button>
+      </div>
+      <div class="stage" id="e-stage">
         <div class="compare" id="e-compare" hidden>
-          <img id="e-after" alt="Resultado">
-          <div class="before" id="e-before-wrap"><img id="e-before" alt="Original"></div>
-          <input type="range" id="e-slider" min="0" max="100" value="50" aria-label="Comparar antes y después">
+          <img id="e-after" alt="Imagen mejorada">
+          <div class="before" id="e-before-wrap"><img id="e-before" alt="Imagen original"></div>
+          <div class="divider" aria-hidden="true"><span class="anchor"></span></div>
           <span class="tag left">Antes</span><span class="tag right">Después</span>
         </div>
         <p class="placeholder" id="e-placeholder">Carga una imagen para empezar.</p>
       </div>
-    </section>
-
-    <!-- ===================== VECTORIZAR ===================== -->
-    <section class="panel" id="panel-vector" hidden>
-      <div class="controls">
-        <label>Preajuste
-          <select id="v-preset">
-            <option value="logo">Logo / icono (pocos colores)</option>
-            <option value="illustration" selected>Ilustración / dibujo</option>
-            <option value="photo">Fotografía (muchos colores)</option>
-            <option value="bw">Blanco y negro</option>
-            <option value="custom">Personalizado</option>
-          </select>
-        </label>
-        <label>Colores <output id="v-colors-v">16</output>
-          <input type="range" id="v-colors" min="2" max="64" value="16">
-        </label>
-        <label>Detalle (resolución de trabajo) <output id="v-size-v">1000</output> px
-          <input type="range" id="v-size" min="200" max="2000" step="100" value="1000">
-        </label>
-        <label>Eliminar manchas menores de <output id="v-speck-v">10</output> px
-          <input type="range" id="v-speck" min="1" max="200" value="10">
-        </label>
-        <label>Simplificación <output id="v-tol-v">0.8</output>
-          <input type="range" id="v-tol" min="0" max="4" step="0.1" value="0.8">
-        </label>
-        <label>Suavizar entrada <output id="v-blur-v">0.0</output>
-          <input type="range" id="v-blur" min="0" max="3" step="0.1" value="0">
-        </label>
-        <label>Esquinas nítidas si el ángulo es menor de <output id="v-corner-v">100</output>°
-          <input type="range" id="v-corner" min="0" max="180" value="100">
-        </label>
-        <label class="check"><input type="checkbox" id="v-smooth" checked> Curvas suaves</label>
-        <label class="check"><input type="checkbox" id="v-clean" checked> Limpiar bordes (quita halos de antialiasing)</label>
-        <label class="check"><input type="checkbox" id="v-use-enhanced"> Vectorizar la imagen mejorada (si existe)</label>
-        <div class="actions">
-          <button type="button" id="v-run" class="primary" disabled>✏️ Vectorizar</button>
-          <button type="button" id="v-download" disabled>⬇️ Descargar SVG</button>
-        </div>
-        <div class="actions">
-          <label class="inline">PNG desde el SVG a
-            <select id="v-png-scale">
-              <option value="1">×1</option>
-              <option value="2">×2</option>
-              <option value="4" selected>×4</option>
-              <option value="8">×8</option>
-            </select>
-          </label>
-          <button type="button" id="v-download-png" disabled>⬇️ PNG alta resolución</button>
-        </div>
-        <p class="muted small" id="v-status"></p>
+      <div class="viewbar">
+        <label for="e-split" class="inline">Comparar <input type="range" id="e-split" min="0" max="100" value="50"></label>
+        <label for="e-zoom" class="inline">Zoom <output id="e-zoom-v">100</output>% <input type="range" id="e-zoom" min="100" max="800" step="25" value="100"></label>
       </div>
-
-      <div class="viewer">
-        <div class="side" id="v-side" hidden>
-          <figure><img id="v-original" alt="Original"><figcaption>Original</figcaption></figure>
-          <figure><img id="v-result" alt="SVG"><figcaption>Vector (SVG)</figcaption></figure>
-        </div>
-        <p class="placeholder" id="v-placeholder">Carga una imagen para empezar.</p>
+      <p class="status" id="e-status"></p>
+      <div class="export">
+        <button type="button" id="e-download" disabled>Descargar PNG</button>
       </div>
-    </section>
-  </main>
+      <p class="hint">Si la descarga no empieza, haz clic derecho (o mantén pulsado) sobre la imagen y elige «Guardar imagen».</p>
+    </div>
+  </section>
 
-  <div id="busy" class="busy" hidden><div class="spinner"></div><span id="busy-text">Procesando…</span></div>
-
+  <div class="toast" id="toast" role="status" hidden></div>
+</div>
+<!--APP-END-->
   <script src="enhancer.js"></script>
   <script src="vectorizer.js"></script>
   <script src="app.js"></script>

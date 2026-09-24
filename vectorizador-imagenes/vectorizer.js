@@ -13,7 +13,16 @@
  *
  * Trabaja sobre objetos tipo ImageData: { width, height, data }.
  */
-(function (root) {
+(function (factory) {
+  'use strict';
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else {
+    // El código fuente de la fábrica permite crear un Web Worker sin archivos extra.
+    api.factorySource = factory.toString();
+    self.Vectorizer = api;
+  }
+})(function () {
   'use strict';
 
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -413,16 +422,22 @@
   // 5a. Suavizado del contorno: promedia cada vértice con sus vecinos
   // (pesos 1-2-1). Convierte las "escaleras" de píxeles en líneas limpias y
   // sólo redondea las esquinas reales una fracción de píxel.
-  function smoothLoop(pts, passes) {
+  // Los puntos sobre el borde de la imagen no se separan de él.
+  function smoothLoop(pts, passes, width, height) {
     const n = pts.length / 2;
     if (n < 8) return pts;
+    const lockX = new Uint8Array(n), lockY = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      lockX[i] = pts[i * 2] === 0 || pts[i * 2] === width ? 1 : 0;
+      lockY[i] = pts[i * 2 + 1] === 0 || pts[i * 2 + 1] === height ? 1 : 0;
+    }
     let cur = Float64Array.from(pts);
     let next = new Float64Array(cur.length);
     for (let it = 0; it < passes; it++) {
       for (let i = 0; i < n; i++) {
         const a = ((i + n - 1) % n) * 2, b = i * 2, c = ((i + 1) % n) * 2;
-        next[b] = (cur[a] + 2 * cur[b] + cur[c]) / 4;
-        next[b + 1] = (cur[a + 1] + 2 * cur[b + 1] + cur[c + 1]) / 4;
+        next[b] = lockX[i] ? cur[b] : (cur[a] + 2 * cur[b] + cur[c]) / 4;
+        next[b + 1] = lockY[i] ? cur[b + 1] : (cur[a + 1] + 2 * cur[b + 1] + cur[c + 1]) / 4;
       }
       const t = cur; cur = next; next = t;
     }
@@ -509,6 +524,24 @@
 
   // ---------------------------------------------------------------------------
   /**
+   * Construye el SVG a partir de las capas. Se separa de vectorize() para
+   * poder cambiar colores u ocultar capas (p. ej. el fondo) sin recalcular.
+   * @param {{width:number,height:number,outWidth:number,outHeight:number,layers:Array}} result
+   * @param {{colors?:string[], hidden?:boolean[]}} [edits]
+   */
+  function buildSvg(result, edits) {
+    const e = edits || {};
+    const body = [];
+    result.layers.forEach((layer, i) => {
+      if (e.hidden && e.hidden[i]) return;
+      const color = (e.colors && e.colors[i]) || layer.color;
+      body.push('<path fill="' + color + '" d="' + layer.d + '"/>');
+    });
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + result.outWidth + '" height="' + result.outHeight +
+      '" viewBox="0 0 ' + result.width + ' ' + result.height + '" fill-rule="evenodd">\n' + body.join('\n') + '\n</svg>\n';
+  }
+
+  /**
    * @param {{width:number,height:number,data:Uint8ClampedArray}} img
    * @param {object} opts
    *   colors      número de colores (2..64)
@@ -519,53 +552,75 @@
    *   blur        sigma del suavizado previo (0 = sin suavizado)
    *   cleanEdges  bool, quitar franjas finas de colores de transición
    *   outWidth / outHeight tamaño del SVG final (por defecto el de la imagen)
-   * @returns {{svg:string, colors:number, paths:number, nodes:number}}
+   *   onProgress  función (fracción 0..1, texto) opcional
+   * @returns {{svg:string, layers:Array<{color:string,d:string,area:number}>,
+   *            width:number, height:number, outWidth:number, outHeight:number,
+   *            colors:number, nodes:number}}
+   *   La primera capa es el fondo; el resto va de mayor a menor área. area es la fracción
+   *   de la imagen que ocupa ese color.
    */
   function vectorize(img, opts) {
     const o = Object.assign({
       colors: 16, minArea: 10, tolerance: 0.8, smooth: true, cornerAngle: 100, blur: 0, cleanEdges: true,
-      outWidth: img.width, outHeight: img.height,
+      outWidth: img.width, outHeight: img.height, onProgress: null,
     }, opts);
+    const progress = (f, text) => { if (o.onProgress) o.onProgress(f, text); };
     const { width, height } = img;
+    progress(0, 'Preparando…');
     const src = o.blur > 0 ? blurRGB(img, o.blur) : img;
+    progress(0.05, 'Agrupando colores…');
     const { labels, palette } = quantize(src, o.colors);
+    progress(0.25, 'Limpiando bordes…');
     if (o.cleanEdges) {
       for (let i = 0; i < 2 && cleanEdges(labels, src, palette, width, height) > 0; i++);
     }
+    progress(0.35, 'Eliminando manchas…');
     mergeSmallRegions(labels, width, height, o.minArea);
 
     // Área de cada color → orden de apilado (el más grande al fondo).
     const area = new Array(palette.length).fill(0);
     for (let p = 0; p < labels.length; p++) if (labels[p] >= 0) area[labels[p]]++;
-    const order = palette.map((_, i) => i).filter((i) => area[i] > 0).sort((a, b) => area[b] - area[a]);
+    // La capa del fondo (el color que más aparece en el borde de la imagen)
+    // va siempre la primera; el resto, de mayor a menor área. Así «quitar el
+    // fondo» equivale a ocultar la primera capa.
+    const border = new Array(palette.length).fill(0);
+    const countBorder = (p) => { if (labels[p] >= 0) border[labels[p]]++; };
+    for (let x = 0; x < width; x++) { countBorder(x); countBorder((height - 1) * width + x); }
+    for (let y = 1; y < height - 1; y++) { countBorder(y * width); countBorder(y * width + width - 1); }
+    let bg = -1;
+    for (let i = 0; i < palette.length; i++) if (area[i] > 0 && (bg < 0 || border[i] > border[bg])) bg = i;
+    const order = palette.map((_, i) => i).filter((i) => area[i] > 0 && i !== bg).sort((a, b) => area[b] - area[a]);
+    if (bg >= 0) order.unshift(bg);
     const rank = new Int32Array(palette.length).fill(-1);
     order.forEach((lab, r) => { rank[lab] = r; });
     const pixRank = new Int32Array(labels.length);
     for (let p = 0; p < labels.length; p++) pixRank[p] = labels[p] >= 0 ? rank[labels[p]] : -1;
 
     const cornerCos = Math.cos((o.cornerAngle * Math.PI) / 180);
-    const body = [];
-    let pathCount = 0, nodeCount = 0;
+    const layers = [];
+    let nodeCount = 0;
     for (let r = 0; r < order.length; r++) {
+      progress(0.4 + 0.6 * (r / order.length), 'Trazando contornos (' + (r + 1) + '/' + order.length + ')…');
       const loops = traceMask((p) => pixRank[p] >= r, width, height);
       let d = '';
       for (const loop of loops) {
-        const simple = simplifyClosed(o.tolerance > 0 ? smoothLoop(loop, 2) : loop, o.tolerance);
+        const simple = simplifyClosed(o.tolerance > 0 ? smoothLoop(loop, 2, width, height) : loop, o.tolerance);
         nodeCount += simple.length / 2;
         d += loopToPath(simple, o.smooth, cornerCos);
       }
       if (!d) continue;
-      pathCount++;
-      body.push('<path fill="' + hex(palette[order[r]]) + '" d="' + d + '"/>');
+      layers.push({ color: hex(palette[order[r]]), d, area: area[order[r]] / labels.length });
     }
+    progress(1, 'Listo');
 
-    const svg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="' + o.outWidth + '" height="' + o.outHeight +
-      '" viewBox="0 0 ' + width + ' ' + height + '" fill-rule="evenodd">\n' + body.join('\n') + '\n</svg>\n';
-    return { svg, colors: order.length, paths: pathCount, nodes: nodeCount };
+    const result = {
+      layers, width, height, outWidth: o.outWidth, outHeight: o.outHeight,
+      colors: layers.length, nodes: nodeCount,
+    };
+    result.svg = buildSvg(result);
+    return result;
   }
 
-  const api = { vectorize, quantize, cleanEdges, mergeSmallRegions, traceMask, simplifyClosed };
-  if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.Vectorizer = api;
-})(typeof self !== 'undefined' ? self : this);
+  const api = { vectorize, buildSvg, quantize, cleanEdges, mergeSmallRegions, traceMask, simplifyClosed };
+  return api;
+});

@@ -7,7 +7,16 @@
  *
  * Trabaja sobre objetos tipo ImageData: { width, height, data }.
  */
-(function (root) {
+(function (factory) {
+  'use strict';
+  const api = factory();
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else {
+    // El código fuente de la fábrica permite crear un Web Worker sin archivos extra.
+    api.factorySource = factory.toString();
+    self.Enhancer = api;
+  }
+})(function () {
   'use strict';
 
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -266,19 +275,24 @@
    *   sharpen    0..100 nitidez
    *   autoLevels bool   mejorar contraste
    *   saturation -50..50
+   *   onProgress función (fracción 0..1, texto) opcional
    * @returns {{width:number,height:number,data:Uint8ClampedArray}}
    */
   function enhance(img, opts) {
-    const o = Object.assign({ scale: 2, denoise: 20, sharpen: 50, autoLevels: true, saturation: 0 }, opts);
+    const o = Object.assign({ scale: 2, denoise: 20, sharpen: 50, autoLevels: true, saturation: 0, onProgress: null }, opts);
+    const progress = (f, text) => { if (o.onProgress) o.onProgress(f, text); };
     const width = img.width, height = img.height;
     const newWidth = Math.max(1, Math.round(width * o.scale));
     const newHeight = Math.max(1, Math.round(height * o.scale));
 
     let buf = toPremultipliedFloat(img);
+    progress(0.05, 'Reduciendo ruido…');
     if (o.denoise > 0) buf = bilateral(buf, width, height, o.denoise);
+    progress(0.35, 'Ampliando…');
     if (newWidth !== width || newHeight !== height) {
       buf = resampleLanczos(buf, width, height, newWidth, newHeight);
     }
+    progress(0.7, 'Enfocando…');
     if (o.sharpen > 0) {
       const sigma = 0.7 + 0.35 * Math.max(1, o.scale);
       unsharpMask(buf, newWidth, newHeight, (o.sharpen / 100) * 1.6, sigma);
@@ -286,10 +300,10 @@
     const data = fromPremultipliedFloat(buf, newWidth, newHeight);
     if (o.autoLevels) autoLevels(data);
     if (o.saturation) adjustSaturation(data, o.saturation);
+    progress(1, 'Listo');
     return { width: newWidth, height: newHeight, data };
   }
 
   const api = { enhance, resampleLanczos, toPremultipliedFloat, fromPremultipliedFloat };
-  if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.Enhancer = api;
-})(typeof self !== 'undefined' ? self : this);
+  return api;
+});
